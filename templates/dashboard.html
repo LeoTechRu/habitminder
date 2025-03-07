@@ -3,38 +3,80 @@
 {% block title %}Панель управления{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Ваши привычки</h2>
-<a href="{{ url_for('create_habit') }}" class="btn btn-success mb-3">＋ Новая привычка</a>
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Ваши привычки</h1>
+        <a href="{{ url_for('create_habit') }}" class="btn btn-success">
+            + Новая привычка
+        </a>
+    </div>
 
-<div class="row row-cols-1 row-cols-md-3 g-4">
-    {% for habit in habits %}
-    <div class="col">
-        <div class="card h-100 shadow-sm">
-            <div class="card-body">
-                <h5 class="card-title">{{ habit.title }}</h5>
-                <p class="card-text text-muted">
-                    Частота: {{ habit.frequency|capitalize }}
-                </p>
-                <div class="habit-calendar" data-habit-id="{{ habit.id }}">
-                    {% for i in range(30) %}
-                        {% set date = (habit.created_at + timedelta(days=i)).strftime('%Y-%m-%d') %}
-                        <div class="day {% if date in habit.progress %} 
-                            {% if habit.progress[date] %}bg-success{% else %}bg-danger{% endif %}
-                        {% endif %}" data-date="{{ date }}"></div>
-                    {% endfor %}
+    <!-- Группировка по частоте выполнения -->
+    <div class="row g-4">
+        {% for freq in ['daily', 'weekly', 'monthly'] %}
+        <div class="col-12">
+            <h3 class="text-{% if freq == 'daily' %}success{% elif freq == 'weekly' %}primary{% else %}warning{% endif %} mb-3">
+                {% if freq == 'daily' %}🗓 Ежедневные
+                {% elif freq == 'weekly' %}📅 Еженедельные
+                {% else %}📆 Ежемесячные{% endif %} привычки
+            </h3>
+            
+            <div class="row row-cols-1 row-cols-md-3 g-4">
+                {% for habit in habits if habit.frequency == freq %}
+                <div class="col">
+                    <div class="card h-100 border-{% if freq == 'daily' %}success{% elif freq == 'weekly' %}primary{% else %}warning{% endif %} shadow-sm">
+                        <div class="card-header bg-{% if freq == 'daily' %}success{% elif freq == 'weekly' %}primary{% else %}warning{% endif %} text-white">
+                            <h5 class="card-title mb-0">{{ habit.title }}</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="badge bg-dark">
+                                    {{ habit.frequency|ru_frequency }}
+                                </span>
+                                <small class="text-muted">
+                                    Создано: {{ habit.created_at.strftime('%d.%m.%Y') }}
+                                </small>
+                            </div>
+                            
+                            <!-- Прогресс выполнения -->
+                            <div class="progress mb-3" style="height: 20px;">
+                                <div class="progress-bar bg-success" 
+                                     role="progressbar" 
+                                     style="width: {{ (habit.progress.values()|sum / habit.progress.values()|length * 100) if habit.progress else 0 }}%"
+                                     aria-valuenow="{{ habit.progress.values()|sum }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="{{ habit.progress.values()|length }}">
+                                    {{ ((habit.progress.values()|sum / habit.progress.values()|length * 100)|round(1)) if habit.progress }}%
+                                </div>
+                            </div>
+                            
+                            <!-- Календарь отметок -->
+                            <div class="habit-calendar" data-habit-id="{{ habit.id }}">
+                                {% for date, status in generate_calendar(habit) %}
+                                <div class="day 
+                                    {% if status == 'completed' %}bg-success
+                                    {% elif status == 'missed' %}bg-danger
+                                    {% else %}bg-light{% endif %}" 
+                                     data-date="{{ date }}"
+                                     data-bs-toggle="tooltip" 
+                                     title="{{ date|format_tooltip(habit) }}"
+                                     {% if not is_future_date(date) %}style="opacity:0.6; pointer-events:none"{% endif %}>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="card-footer bg-transparent">
-                <small class="text-muted">Создано: {{ habit.created_at.strftime('%d.%m.%Y') }}</small>
+                {% else %}
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        Нет {{ freq|ru_frequency }} привычек
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </div>
+        {% endfor %}
     </div>
-    {% else %}
-    <div class="col-12">
-        <div class="alert alert-info">
-            У вас пока нет привычек. Начните с создания новой!
-        </div>
-    </div>
-    {% endfor %}
 </div>
 {% endblock %}

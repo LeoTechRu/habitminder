@@ -1,66 +1,72 @@
+/* Календарь привычек */
 .habit-calendar {
     display: grid;
-    grid-template-columns: repeat(10, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
     gap: 5px;
-    padding: 10px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin: 10px 0;
 }
 
 .day {
-    width: 30px;
-    height: 30px;
-    border-radius: 5px;
+    width: 35px;
+    height: 35px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s;
-    border: 1px solid #dee2e6;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9em;
     position: relative;
 }
 
 .day:hover {
-    transform: scale(1.1);
+    transform: scale(1.15);
+    z-index: 2;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.16);
 }
 
 .day.bg-success {
-    border-color: transparent;
-}
-
-.card {
-    transition: box-shadow 0.3s ease-in-out;
-}
-
-.card:hover {
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-}
-
-.form-check-input:checked {
-    background-color: #198754;
-    border-color: #198754;
-}
-
-.day {
-    width: 30px;
-    height: 30px;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: 1px solid #dee2e6;
-    position: relative;
-}
-
-.day.bg-success::after {
-    content: '✓';
-    color: white;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    background-color: #2e7d32 !important;
+    border-color: #1b5e20;
 }
 
 .day.bg-danger {
-    opacity: 0.5;
+    background-color: #c62828 !important;
     cursor: not-allowed;
+    opacity: 0.7;
 }
 
-/* Заголовки категорий */
-.text-success { color: #2e7d32 !important; }
-.text-primary { color: #1565c0 !important; }
-.text-warning { color: #f9a825 !important; }
+.day.bg-light {
+    background-color: #fff !important;
+    border-color: #dee2e6;
+}
+
+/* Анимация прогресс-бара */
+.progress-bar {
+    transition: width 0.5s ease-in-out;
+}
+
+/* Стили категорий */
+.border-success { border-color: #2e7d32 !important; }
+.border-primary { border-color: #1565c0 !important; }
+.border-warning { border-color: #f9a825 !important; }
+
+.bg-success { background-color: #2e7d32 !important; }
+.bg-primary { background-color: #1565c0 !important; }
+.bg-warning { background-color: #f9a825 !important; }
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .habit-calendar {
+        grid-template-columns: repeat(5, 1fr);
+    }
+    
+    .day {
+        width: 30px;
+        height: 30px;
+    }
+}
