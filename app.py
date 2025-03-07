@@ -220,11 +220,16 @@ def create_habit():
 @login_required
 def update_habit(habit_id):
     habit = Habit.query.get_or_404(habit_id)
-    date_str = request.form['date']
-    
+    if habit.user_id != current_user.id:
+        return {'status': 'error', 'message': 'Нет прав для изменения'}, 403
+
     try:
+        data = request.get_json()
+        date_str = data.get('date')
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-        if date_obj > datetime.utcnow().date():
+        today = datetime.utcnow().date()
+        
+        if date_obj > today:
             return {'status': 'error', 'message': 'Нельзя отмечать будущие даты'}, 400
             
         progress = habit.progress or {}
@@ -235,8 +240,19 @@ def update_habit(habit_id):
         db.session.commit()
         
         return {'status': 'success', 'new_status': progress[date_str]}
-    except ValueError:
-        return {'status': 'error', 'message': 'Неверный формат даты'}, 400
+    except (ValueError, KeyError, json.JSONDecodeError) as e:
+        return {'status': 'error', 'message': 'Ошибка обработки данных'}, 400
+
+@app.route('/habit/<int:habit_id>/delete', methods=['DELETE'])
+@login_required
+def delete_habit(habit_id):
+    habit = Habit.query.get_or_404(habit_id)
+    if habit.user_id != current_user.id:
+        return {'status': 'error', 'message': 'Нет прав для удаления'}, 403
+    
+    db.session.delete(habit)
+    db.session.commit()
+    return {'status': 'success'}
 
 @app.route('/logout')
 @login_required
