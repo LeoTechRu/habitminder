@@ -1,5 +1,5 @@
 # /sd/habitminder/app.py
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as dt_date
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
@@ -18,28 +18,82 @@ login_manager = LoginManager()
 def create_app():
     app = Flask(__name__)
     
-    # Конфигурация
+    # Конфигурация приложения
     app.config.from_prefixed_env()
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+    app.config.update({
+        'SQLALCHEMY_DATABASE_URI': os.environ.get('DATABASE_URL'),
+        'SECRET_KEY': os.environ.get('SECRET_KEY'),
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False
+    })
     
-    # Инициализация расширений с приложением
+    # Инициализация расширений
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
     
-    # Настройка Flask-Login
+    # Настройка аутентификации
     login_manager.login_view = 'login'
+    login_manager.login_message_category = 'info'
+
+    # Пользовательские фильтры Jinja2
+    def ru_frequency(freq):
+        frequency_map = {
+            'daily': 'Ежедневно',
+            'weekly': 'Еженедельно', 
+            'monthly': 'Ежемесячно'
+        }
+        return frequency_map.get(freq, freq)
     
-    # Контекст для шаблонов
+    def format_tooltip(date_str, habit):
+        try:
+            date_obj = dt_date.fromisoformat(date_str)
+            status = 'Выполнено' if habit.progress.get(date_str) else 'Пропущено'
+            return f"{date_obj.strftime('%d %B %Y')}\nСтатус: {status}"
+        except (ValueError, KeyError):
+            return "Неверный формат даты"
+
+    app.jinja_env.filters.update({
+        'ru_frequency': ru_frequency,
+        'format_tooltip': format_tooltip
+    })
+
+    # Контекстные процессоры
     @app.context_processor
     def inject_utilities():
-        return dict(timedelta=timedelta)
-    
-    # Регистрация моделей
+        def generate_calendar(habit):
+            today = dt_date.today()
+            return [
+                (
+                    (habit.created_at.date() + timedelta(days=i)).isoformat(),
+                    'future' if (habit.created_at.date() + timedelta(days=i)) > today
+                    else 'completed' if habit.progress.get((habit.created_at.date() + timedelta(days=i)).isoformat(), False)
+                    else 'missed'
+                ) for i in range(30)
+            ]
+
+        def is_future_date(date_str):
+            try:
+                return dt_date.fromisoformat(date_str) > dt_date.today()
+            except ValueError:
+                return False
+
+        return {
+            'generate_calendar': generate_calendar,
+            'is_future_date': is_future_date,
+            'timedelta': timedelta,
+            'current_year': datetime.utcnow().year
+        }
+
+    # Инициализация базы данных
     with app.app_context():
         db.create_all()
-    
+        # Пример добавления начальных данных
+        if not User.query.filter_by(email='admin@example.com').first():
+            admin = User(email='admin@example.com')
+            admin.set_password('securepassword')
+            db.session.add(admin)
+            db.session.commit()
+
     return app
 
 # Модели
@@ -166,15 +220,23 @@ def create_habit():
 @login_required
 def update_habit(habit_id):
     habit = Habit.query.get_or_404(habit_id)
-    date = request.form['date']
-    status = request.form.get('status', 'false') == 'true'
+    date_str = request.form['date']
     
-    progress = habit.progress or {}
-    progress[date] = status
-    habit.progress = progress
-    
-    db.session.commit()
-    return {'status': 'success'}
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+        if date_obj > datetime.utcnow().date():
+            return {'status': 'error', 'message': 'Нельзя отмечать будущие даты'}, 400
+            
+        progress = habit.progress or {}
+        current_status = progress.get(date_str, False)
+        progress[date_str] = not current_status
+        
+        habit.progress = progress
+        db.session.commit()
+        
+        return {'status': 'success', 'new_status': progress[date_str]}
+    except ValueError:
+        return {'status': 'error', 'message': 'Неверный формат даты'}, 400
 
 @app.route('/logout')
 @login_required
