@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Панель управления{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Ваши привычки</h2>
+<a href="{{ url_for('create_habit') }}" class="btn btn-success mb-3">＋ Новая привычка</a>
+
+<div class="row row-cols-1 row-cols-md-3 g-4">
+    {% for habit in habits %}
+    <div class="col">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">{{ habit.title }}</h5>
+                <p class="card-text text-muted">
+                    Частота: {{ habit.frequency|capitalize }}
+                </p>
+                <div class="habit-calendar" data-habit-id="{{ habit.id }}">
+                    {% for i in range(30) %}
+                        {% set date = (habit.created_at + timedelta(days=i)).strftime('%Y-%m-%d') %}
+                        <div class="day {% if date in habit.progress %} 
+                            {% if habit.progress[date] %}bg-success{% else %}bg-danger{% endif %}
+                        {% endif %}" data-date="{{ date }}"></div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer bg-transparent">
+                <small class="text-muted">Создано: {{ habit.created_at.strftime('%d.%m.%Y') }}</small>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            У вас пока нет привычек. Начните с создания новой!
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

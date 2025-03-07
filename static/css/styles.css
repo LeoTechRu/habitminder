@@ -1,0 +1,37 @@
+.habit-calendar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
+    gap: 5px;
+    padding: 10px;
+}
+
+.day {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s;
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+}
+
+.day:hover {
+    transform: scale(1.1);
+}
+
+.day.bg-success {
+    border-color: transparent;
+}
+
+.card {
+    transition: box-shadow 0.3s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}

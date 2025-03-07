@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Новая привычка{% endblock %}
+
+{% block content %}
+<div class="card mx-auto" style="max-width: 500px;">
+    <div class="card-header bg-success text-white">
+        <h4 class="mb-0">Создать новую привычку</h4>
+    </div>
+    <div class="card-body">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            <div class="mb-3">
+                {{ form.title.label(class="form-label") }}
+                {{ form.title(class="form-control") }}
+            </div>
+            <div class="mb-3">
+                {{ form.frequency.label(class="form-label") }}
+                {{ form.frequency(class="form-select") }}
+            </div>
+            <button type="submit" class="btn btn-success w-100">Создать</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
