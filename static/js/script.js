@@ -1,60 +1,79 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Инициализация тултипов
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    const tooltipList = [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
+    const tooltipList = [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el, {
+        boundary: 'window',
+        customClass: 'habit-tooltip'
+    }));
 
     // Обработчик кликов по дням календаря
-    document.querySelectorAll('.day:not(.bg-danger)').forEach(day => {
-        day.addEventListener('click', async function() {
-            const habitId = this.closest('.habit-calendar').dataset.habitId;
-            const date = this.dataset.date;
-            const currentDate = new Date();
-            const selectedDate = new Date(date);
-            
-            // Проверка на будущие и прошедшие даты
-            if (selectedDate > currentDate) {
-                alert('Нельзя отмечать будущие даты!');
+    document.querySelectorAll('.day').forEach(day => {
+        day.addEventListener('click', async function(event) {
+            if (this.classList.contains('bg-danger') || 
+                this.style.pointerEvents === 'none') {
+                event.stopPropagation();
                 return;
             }
+
+            const habitId = this.closest('.habit-calendar').dataset.habitId;
+            const date = this.dataset.date;
             
             try {
                 const response = await fetch(`/habit/${habitId}/update`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: `date=${date}`
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ date })
                 });
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 
                 const result = await response.json();
                 
                 if (result.status === 'success') {
-                    // Обновление визуального состояния
                     this.classList.toggle('bg-success');
                     this.classList.toggle('bg-light');
                     
                     // Обновление тултипа
                     const tooltip = bootstrap.Tooltip.getInstance(this);
-                    tooltip.setContent({'.tooltip-inner': 
-                        `${date.split('-').reverse().join('.')}\nСтатус: ${result.new_status ? 'Выполнено' : 'Пропущено'}`
+                    tooltip.setContent({
+                        '.tooltip-inner': 
+                            `${date.split('-').reverse().join('.')}\nСтатус: ${result.new_status ? '✅ Выполнено' : '❌ Пропущено'}`
                     });
-                    
-                    // Обновление счетчиков прогресса
-                    updateProgressBars(habitId);
                 }
             } catch (error) {
-                console.error('Ошибка обновления:', error);
-                alert('Произошла ошибка при обновлении статуса');
+                console.error('Update error:', error);
+                alert(error.message || 'Ошибка обновления статуса');
             }
         });
     });
 
-    // Функция обновления прогресс-баров
-    function updateProgressBars(habitId) {
-        document.querySelectorAll(`[data-habit-id="${habitId}"] .progress-bar`).forEach(bar => {
-            const totalDays = Object.keys(bar.dataset).length;
-            const completedDays = [...bar.parentNode.querySelectorAll('.bg-success')].length;
-            const percentage = (completedDays / totalDays) * 100;
-            bar.style.width = `${percentage}%`;
-            bar.textContent = `${Math.round(percentage)}%`;
+    // Обновление прогресс-баров при изменении
+    const observer = new MutationObserver(mutations => {
+        mutations.forEach(mutation => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                const habitId = mutation.target.closest('.habit-calendar').dataset.habitId;
+                updateProgressBar(habitId);
+            }
         });
+    });
+
+    document.querySelectorAll('.habit-calendar').forEach(calendar => {
+        observer.observe(calendar, {
+            attributes: true,
+            subtree: true,
+            attributeFilter: ['class']
+        });
+    });
+
+    function updateProgressBar(habitId) {
+        const progressBar = document.querySelector(`[data-habit-id="${habitId}"] .progress-bar`);
+        const completedDays = document.querySelectorAll(`[data-habit-id="${habitId}"] .bg-success`).length;
+        const totalDays = document.querySelectorAll(`[data-habit-id="${habitId}"] .day`).length;
+        
+        if (totalDays > 0) {
+            const percentage = (completedDays / totalDays) * 100;
+            progressBar.style.width = `${percentage}%`;
+            progressBar.textContent = `${Math.round(percentage)}%`;
+        }
     }
 });
