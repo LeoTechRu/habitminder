@@ -1,6 +1,6 @@
 .habit-calendar {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
+    grid-template-columns: repeat(10, 1fr);
     gap: 5px;
     padding: 10px;
 }
@@ -8,11 +8,11 @@
 .day {
     width: 30px;
     height: 30px;
-    border-radius: 50%;
+    border-radius: 5px;
     cursor: pointer;
-    transition: transform 0.2s;
-    background-color: #f8f9fa;
-    border: 2px solid #dee2e6;
+    transition: all 0.2s;
+    border: 1px solid #dee2e6;
+    position: relative;
 }
 
 .day:hover {
@@ -35,3 +35,32 @@
     background-color: #198754;
     border-color: #198754;
 }
+
+.day {
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid #dee2e6;
+    position: relative;
+}
+
+.day.bg-success::after {
+    content: '✓';
+    color: white;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.day.bg-danger {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Заголовки категорий */
+.text-success { color: #2e7d32 !important; }
+.text-primary { color: #1565c0 !important; }
+.text-warning { color: #f9a825 !important; }

@@ -1,20 +1,38 @@
-<!-- templates/index.html -->
-<!DOCTYPE html>
-<html>
-<head>
-    <title>HabitMinder</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <h1>Welcome to HabitMinder</h1>
-        {% if current_user.is_authenticated %}
-            <a href="{{ url_for('dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('logout') }}">Logout</a>
-        {% else %}
-            <a href="{{ url_for('login') }}">Login</a>
-            <a href="{{ url_for('register') }}">Register</a>
-        {% endif %}
+<!-- /sd/habitminder/templates/index.html -->
+{% extends "base.html" %}
+{% block title %}HabitMinder{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card mx-auto" style="max-width: 600px;">
+        <div class="card-header bg-success text-white text-center">
+            <h1 class="mb-0">Добро пожаловать в HabitMinder</h1>
+        </div>
+        <div class="card-body text-center">
+            {% if current_user.is_authenticated %}
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-lg btn-success">
+                        Личный кабинет
+                    </a>
+                    <a href="{{ url_for('logout') }}" class="btn btn-lg btn-outline-secondary">
+                        Выйти
+                    </a>
+                </div>
+            {% else %}
+                <p class="lead mb-4">Начните менять свои привычки сегодня!</p>
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('login') }}" class="btn btn-lg btn-success">
+                        Вход
+                    </a>
+                    <a href="{{ url_for('register') }}" class="btn btn-lg btn-outline-success">
+                        Регистрация
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        <div class="card-footer text-center text-muted">
+            <small>Ваш надежный помощник в формировании привычек</small>
+        </div>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}

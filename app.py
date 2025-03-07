@@ -31,13 +31,14 @@ def create_app():
     # Настройка Flask-Login
     login_manager.login_view = 'login'
     
+    # Контекст для шаблонов
+    @app.context_processor
+    def inject_utilities():
+        return dict(timedelta=timedelta)
+    
     # Регистрация моделей
     with app.app_context():
         db.create_all()
-    
-    # Регистрация blueprints/роутов
-    #from . import routes
-    #app.register_blueprint(routes.bp)
     
     return app
 
@@ -70,40 +71,44 @@ app = create_app()
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Forms
+# Формы
 from flask_wtf import FlaskForm
 
 class LoginForm(FlaskForm):
-    email = StringField('Email', validators=[DataRequired(), Email()])
-    password = PasswordField('Password', validators=[DataRequired()])
-    remember = BooleanField('Remember Me')
+    email = StringField('Email', validators=[
+        DataRequired(message="Обязательное поле"),
+        Email(message="Некорректный email")
+    ])
+    password = PasswordField('Пароль', validators=[
+        DataRequired(message="Введите пароль")
+    ])
+    remember = BooleanField('Запомнить меня')
 
 class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[
         DataRequired(message="Обязательное поле"),
-        Email(message="Некорректный email-адрес")
+        Email(message="Некорректный email")
     ])
-    
     password = PasswordField('Пароль', validators=[
         DataRequired(message="Введите пароль"),
-        Length(min=8, max=64, 
-              message="Пароль должен содержать от 8 до 64 символов")
+        Length(min=8, max=64, message="Пароль должен быть от 8 до 64 символов")
     ])
-    
     confirm = PasswordField('Повторите пароль', validators=[
         DataRequired(message="Подтвердите пароль"),
-        EqualTo('password', message="Пароли должны совпадать")
+        EqualTo('password', message="Пароли не совпадают")
     ])
 
 class HabitForm(FlaskForm):
-    title = StringField('Habit Title', validators=[DataRequired()])
-    frequency = SelectField('Frequency', choices=[
-        ('daily', 'Daily'), 
-        ('weekly', 'Weekly'), 
-        ('monthly', 'Monthly')
+    title = StringField('Название привычки', validators=[
+        DataRequired(message="Введите название")
+    ])
+    frequency = SelectField('Периодичность', choices=[
+        ('daily', 'Ежедневно'), 
+        ('weekly', 'Еженедельно'), 
+        ('monthly', 'Ежемесячно')
     ])
 
-# Routes
+# Роуты
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -116,22 +121,22 @@ def login():
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
             return redirect(url_for('dashboard'))
-        flash('Invalid email or password')
+        flash('Неверный email или пароль', 'error')
     return render_template('login.html', form=form)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        if form.password.data != form.confirm.data:
-            flash('Passwords must match')
+        if User.query.filter_by(email=form.email.data).first():
+            flash('Этот email уже зарегистрирован', 'error')
             return redirect(url_for('register'))
         
         user = User(email=form.email.data)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        flash('Registration successful')
+        flash('Регистрация прошла успешно! Теперь войдите в систему', 'success')
         return redirect(url_for('login'))
     return render_template('register.html', form=form)
 
@@ -153,7 +158,7 @@ def create_habit():
         )
         db.session.add(habit)
         db.session.commit()
-        flash('Habit created successfully')
+        flash('Привычка успешно создана', 'success')
         return redirect(url_for('dashboard'))
     return render_template('create_habit.html', form=form)
 
@@ -175,6 +180,7 @@ def update_habit(habit_id):
 @login_required
 def logout():
     logout_user()
+    flash('Вы успешно вышли из системы', 'info')
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
