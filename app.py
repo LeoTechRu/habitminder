@@ -1,4 +1,3 @@
-# /sd/habitminder/app.py
 from datetime import datetime, timedelta, date as dt_date
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -9,6 +8,10 @@ from wtforms import StringField, PasswordField, BooleanField, SelectField
 from wtforms.validators import DataRequired, Email, Length, EqualTo
 import os
 import json
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.DEBUG)
 
 # Инициализация расширений
 db = SQLAlchemy()
@@ -47,9 +50,13 @@ def create_app():
     def format_tooltip(date_str, habit):
         try:
             date_obj = dt_date.fromisoformat(date_str)
-            status = 'Выполнено' if habit.progress.get(date_str) else 'Пропущено'
-            return f"{date_obj.strftime('%d %B %Y')}\nСтатус: {status}"
-        except (ValueError, KeyError):
+            status_map = {
+                'completed': '✅ Выполнено',
+                'missed': '❌ Пропущено',
+                'current': '🕒 Сегодня'
+            }
+            return f"{date_obj.strftime('%d %B %Y')}\n{status_map.get(habit.progress.get(date_str, 'current'))}"
+        except ValueError:
             return "Неверный формат даты"
 
     app.jinja_env.filters.update({
@@ -62,14 +69,21 @@ def create_app():
     def inject_utilities():
         def generate_calendar(habit):
             today = dt_date.today()
-            return [
-                (
-                    (habit.created_at.date() + timedelta(days=i)).isoformat(),
-                    'future' if (habit.created_at.date() + timedelta(days=i)) > today
-                    else 'completed' if habit.progress.get((habit.created_at.date() + timedelta(days=i)).isoformat(), False)
+            start_date = max(
+                habit.created_at.date(),
+                today - timedelta(days=14)  # Показываем 2 недели назад от текущей даты
+            )
+        
+            calendar_days = []
+            for i in range(30):  # Всего 30 дней в календаре
+                current_date = start_date + timedelta(days=i)
+                status = 'future' if current_date > today else (
+                    'completed' if habit.progress.get(current_date.isoformat(), False)
+                    else 'current' if current_date == today
                     else 'missed'
-                ) for i in range(30)
-            ]
+                )
+                calendar_days.append((current_date.isoformat(), status))
+            return calendar_days
 
         def is_future_date(date_str):
             try:
@@ -93,6 +107,7 @@ def create_app():
             admin.set_password('securepassword')
             db.session.add(admin)
             db.session.commit()
+            logging.info("Создан администратор с email: admin@example.com")
 
     return app
 
@@ -123,6 +138,7 @@ app = create_app()
 # Инициализация Flask-Login
 @login_manager.user_loader
 def load_user(user_id):
+    logging.debug(f"Загрузка пользователя с ID: {user_id}")
     return User.query.get(int(user_id))
 
 # Формы
@@ -165,21 +181,26 @@ class HabitForm(FlaskForm):
 # Роуты
 @app.route('/')
 def index():
+    logging.debug("Загрузка главной страницы")
     return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    logging.debug("Попытка входа")
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and user.check_password(form.password.data):
             login_user(user, remember=form.remember.data)
+            logging.info(f"Пользователь {form.email.data} успешно вошел в систему")
             return redirect(url_for('dashboard'))
         flash('Неверный email или пароль', 'error')
+        logging.warning(f"Неверный вход для email: {form.email.data}")
     return render_template('login.html', form=form)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    logging.debug("Попытка регистрации")
     form = RegistrationForm()
     if form.validate_on_submit():
         if User.query.filter_by(email=form.email.data).first():
@@ -191,67 +212,114 @@ def register():
         db.session.add(user)
         db.session.commit()
         flash('Регистрация прошла успешно! Теперь войдите в систему', 'success')
+        logging.info(f"Пользователь {form.email.data} зарегистрирован")
         return redirect(url_for('login'))
     return render_template('register.html', form=form)
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    habits = current_user.habits.all()
-    return render_template('dashboard.html', habits=habits)
+    logging.debug("Загрузка страницы dashboard")
+    habits = Habit.query.filter_by(user_id=current_user.id).all()
+    
+    total_days = 30  # Установите количество дней, которое вы хотите отображать
+
+    for habit in habits:
+        logging.debug(f"Habit {habit.id}: Progress values: {list(habit.progress.values())}, Total days: {len(habit.progress.values())}")
+    
+    return render_template('dashboard.html', habits=habits, total_days=total_days)
 
 @app.route('/habit/create', methods=['GET', 'POST'])
 @login_required
 def create_habit():
+    logging.debug("Попытка создания привычки")
     form = HabitForm()
     if form.validate_on_submit():
-        habit = Habit(
-            title=form.title.data,
-            frequency=form.frequency.data,
-            user_id=current_user.id
-        )
-        db.session.add(habit)
-        db.session.commit()
-        flash('Привычка успешно создана', 'success')
-        return redirect(url_for('dashboard'))
+        try:
+            habit = Habit(
+                title=form.title.data,
+                frequency=form.frequency.data,
+                user_id=current_user.id
+            )
+            db.session.add(habit)
+            db.session.commit()
+            flash('Привычка успешно создана', 'success')
+            logging.info(f"Привычка '{habit.title}' успешно создана пользователем {current_user.email}")
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            flash(f'Ошибка при создании привычки: {str(e)}', 'error')
+            logging.error(f'Ошибка при создании привычки: {str(e)}')
     return render_template('create_habit.html', form=form)
 
 @app.route('/habit/<int:habit_id>/update', methods=['POST'])
 @login_required
 def update_habit(habit_id):
+    """Обработчик обновления статуса привычки и метаданных"""
+    logging.debug(f"Попытка обновления привычки с ID: {habit_id}")
     habit = Habit.query.get_or_404(habit_id)
+    
+    # Проверка прав доступа
     if habit.user_id != current_user.id:
-        return {'status': 'error', 'message': 'Нет прав для изменения'}, 403
+        logging.warning(f"Неавторизованный доступ к привычке {habit_id} от {current_user.email}")
+        return jsonify({'status': 'error', 'message': 'Доступ запрещен'}), 403
 
     try:
-        data = request.get_json()
-        date_str = data.get('date')
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-        today = datetime.utcnow().date()
+        # Обработка разных типов запросов
+        if request.is_json:
+            data = request.get_json()
+            date_str = data.get('date')
+        else:  # Для форм-данных
+            date_str = request.form.get('date')
         
-        if date_obj > today:
-            return {'status': 'error', 'message': 'Нельзя отмечать будущие даты'}, 400
+        # Валидация даты
+        date_obj = dt_date.fromisoformat(date_str)
+        today = dt_date.today()
+        
+        if date_obj != today:
+            logging.warning(f"Попытка изменения не текущей даты: {date_str}")
+            return {'status': 'error', 'message': 'Можно изменять только текущий день'}, 400
             
-        progress = habit.progress or {}
+        if date_obj < habit.created_at.date():
+            logging.warning(f"Дата {date_str} раньше создания привычки")
+            return {'status': 'error', 'message': 'Нельзя изменять исторические данные'}, 400
+
+        # Обновление прогресса
+        progress = habit.progress.copy() or {}
         current_status = progress.get(date_str, False)
         progress[date_str] = not current_status
         
+        # Сохранение изменений
         habit.progress = progress
         db.session.commit()
         
-        return {'status': 'success', 'new_status': progress[date_str]}
-    except (ValueError, KeyError, json.JSONDecodeError) as e:
-        return {'status': 'error', 'message': 'Ошибка обработки данных'}, 400
+        logging.info(f"Обновлен статус привычки {habit_id} за {date_str}")
+        return jsonify({
+            'status': 'success',
+            'new_status': progress[date_str],
+            'completed_days': sum(1 for v in progress.values() if v),
+            'total_days': len(progress)
+        })
+        
+    except Exception as e:
+        logging.error(f'Ошибка обновления: {str(e)}')
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': 'Ошибка сервера: ' + str(e)
+        }), 500
 
 @app.route('/habit/<int:habit_id>/delete', methods=['DELETE'])
 @login_required
 def delete_habit(habit_id):
+    logging.debug(f"Попытка удаления привычки с ID: {habit_id}")
     habit = Habit.query.get_or_404(habit_id)
     if habit.user_id != current_user.id:
+        logging.warning(f"Попытка удаления привычки {habit_id} пользователем {current_user.email}, у которого нет прав")
         return {'status': 'error', 'message': 'Нет прав для удаления'}, 403
     
     db.session.delete(habit)
     db.session.commit()
+    logging.info(f"Привычка {habit_id} успешно удалена пользователем {current_user.email}")
     return {'status': 'success'}
 
 @app.route('/logout')
@@ -259,6 +327,7 @@ def delete_habit(habit_id):
 def logout():
     logout_user()
     flash('Вы успешно вышли из системы', 'info')
+    logging.info(f"Пользователь {current_user.email} вышел из системы")
     return redirect(url_for('index'))
 
 if __name__ == '__main__':

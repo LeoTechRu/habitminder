@@ -10,7 +10,6 @@
         </a>
     </div>
 
-    <!-- Группировка по частоте выполнения -->
     <div class="row g-4">
         {% for freq in ['daily', 'weekly', 'monthly'] %}
         <div class="col-12">
@@ -27,10 +26,15 @@
                         <div class="card-header bg-{% if freq == 'daily' %}success{% elif freq == 'weekly' %}primary{% else %}warning{% endif %} text-white d-flex justify-content-between align-items-center">
                             <h5 class="card-title mb-0">{{ habit.title }}</h5>
                             <div>
-                                <a href="#" class="text-white me-2" data-bs-toggle="modal" data-bs-target="#editHabitModal-{{ habit.id }}">
+                                <a href="#" 
+                                   class="text-white me-2" 
+                                   data-bs-toggle="modal" 
+                                   data-bs-target="#editHabit{{ habit.id }}">
                                     <i class="bi bi-pencil-square"></i>
                                 </a>
-                                <a href="#" class="text-white" onclick="return confirmDelete('{{ habit.id }}')">
+                                <a href="#" 
+                                   class="text-white" 
+                                   onclick="return confirmDelete({{ habit.id }})">
                                     <i class="bi bi-trash"></i>
                                 </a>
                             </div>
@@ -45,8 +49,6 @@
                                 </small>
                             </div>
                             
-                            <!-- Прогресс выполнения -->
-                            {% set total_days = habit.progress.values()|length %}
                             <div class="progress mb-3" style="height: 20px;">
                                 <div class="progress-bar bg-success" 
                                      role="progressbar" 
@@ -58,7 +60,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Календарь отметок -->
                             <div class="habit-calendar" data-habit-id="{{ habit.id }}">
                                 {% for date, status in generate_calendar(habit) %}
                                 <div class="day 
@@ -68,8 +69,8 @@
                                      data-date="{{ date }}"
                                      data-bs-toggle="tooltip" 
                                      title="{{ date|format_tooltip(habit) }}"
-                                     {% if not is_future_date(date) and status != 'missed' %} 
-                                     onclick="updateProgress('{{ habit.id }}', '{{ date }}')"
+                                     {% if not is_future_date(date) and status == 'current' %}
+                                     onclick="handleDayClick('{{ habit.id }}', '{{ date }}', this)"
                                      style="cursor: pointer"
                                      {% else %}
                                      style="opacity:0.6; pointer-events:none; cursor: not-allowed"
@@ -77,6 +78,42 @@
                                 </div>
                                 {% endfor %}
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Модальное окно редактирования -->
+                <div class="modal fade" id="editHabit{{ habit.id }}" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <form action="{{ url_for('update_habit', habit_id=habit.id) }}" method="POST">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Редактировать "{{ habit.title }}"</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label>Название привычки</label>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               name="title" 
+                                               value="{{ habit.title }}" 
+                                               required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label>Периодичность</label>
+                                        <select class="form-select" name="frequency">
+                                            <option value="daily" {% if habit.frequency == 'daily' %}selected{% endif %}>Ежедневно</option>
+                                            <option value="weekly" {% if habit.frequency == 'weekly' %}selected{% endif %}>Еженедельно</option>
+                                            <option value="monthly" {% if habit.frequency == 'monthly' %}selected{% endif %}>Ежемесячно</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -95,55 +132,60 @@
 
 {% block scripts %}
 <script>
-function updateProgress(habitId, date) {
+function handleDayClick(habitId, date, element) {
+    element.style.opacity = '0.5';
+    element.style.pointerEvents = 'none';
+
     fetch(`/habit/${habitId}/update`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ date: date })
     })
-    .then(response => {
-        if (!response.ok) throw new Error('Ошибка сети');
-        return response.json();
+    .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Ошибка сервера');
+        return data;
     })
     .then(data => {
         if(data.status === 'success') {
-            const dayElement = document.querySelector(`[data-habit-id="${habitId}"][data-date="${date}"]`);
-            dayElement.classList.toggle('bg-success');
-            dayElement.classList.toggle('bg-light');
+            element.classList.toggle('bg-success', data.new_status);
+            element.classList.toggle('bg-light', !data.new_status);
             
-            // Обновление тултипа
-            const tooltip = bootstrap.Tooltip.getInstance(dayElement);
+            const progressBar = element.closest('.card').querySelector('.progress-bar');
+            progressBar.style.width = `${(data.completed_days / data.total_days * 100).toFixed(1)}%`;
+            progressBar.textContent = `${Math.round(data.completed_days / data.total_days * 100)}%`;
+            
+            const tooltip = bootstrap.Tooltip.getInstance(element);
             tooltip.setContent({
-                '.tooltip-inner': `${date.split('-').reverse().join('.')}\nСтатус: ${data.new_status ? '✅ Выполнено' : '❌ Пропущено'}`
+                '.tooltip-inner': `${date.split('-').reverse().join('.')}\nСтатус: ${
+                    data.new_status ? '✅ Выполнено' : '❌ Пропущено'
+                }`
             });
         }
     })
     .catch(error => {
         console.error('Ошибка:', error);
         alert(error.message);
+    })
+    .finally(() => {
+        element.style.opacity = '';
+        element.style.pointerEvents = '';
     });
 }
 
-async function confirmDelete(habitId) {
-    if (!confirm('Удалить привычку навсегда?')) return false;
-    
-    try {
-        const response = await fetch(`/habit/${habitId}/delete`, {
+function confirmDelete(habitId) {
+    if (confirm('Удалить эту привычку навсегда?')) {
+        fetch(`/habit/${habitId}/delete`, {
             method: 'DELETE',
             headers: {'Content-Type': 'application/json'}
+        })
+        .then(response => {
+            if (response.ok) {
+                document.querySelector(`[data-habit-id="${habitId}"]`).closest('.col').remove();
+            } else {
+                alert('Ошибка при удалении');
+            }
         });
-        
-        if (response.ok) {
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert(error.message || 'Ошибка удаления');
-        }
-    } catch (error) {
-        console.error('Delete error:', error);
-        alert('Ошибка соединения');
     }
     return false;
 }
