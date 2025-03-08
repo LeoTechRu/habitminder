@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date as dt_date
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from flask_migrate import Migrate
@@ -9,6 +9,8 @@ from wtforms.validators import DataRequired, Email, Length, EqualTo
 import os
 import json
 import logging
+from dotenv import load_dotenv
+load_dotenv()  # Загрузка переменных окружения
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG)
@@ -129,8 +131,12 @@ class Habit(db.Model):
     title = db.Column(db.String(100))
     frequency = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    progress = db.Column(db.JSON, default={})
+    progress = db.Column(db.JSON, default=dict)  # Исправлено на dict
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    
+    def reset_progress(self):
+        self.progress = {}
+        self.created_at = datetime.utcnow()
 
 # Фабрика приложения
 app = create_app()
@@ -254,7 +260,7 @@ def create_habit():
 @app.route('/habit/<int:habit_id>/update', methods=['POST'])
 @login_required
 def update_habit(habit_id):
-    """Обработчик обновления статуса привычки и метаданных"""
+    """Обработчик обновления статуса привычки"""
     logging.debug(f"Попытка обновления привычки с ID: {habit_id}")
     habit = Habit.query.get_or_404(habit_id)
     
@@ -270,18 +276,29 @@ def update_habit(habit_id):
             date_str = data.get('date')
         else:  # Для форм-данных
             date_str = request.form.get('date')
-        
-        # Валидация даты
+
+        # Валидация формата даты
+        if not isinstance(date_str, str) or len(date_str) != 10:
+            raise ValueError("Неверный формат даты. Используйте YYYY-MM-DD")
+
+        # Преобразование даты
         date_obj = dt_date.fromisoformat(date_str)
         today = dt_date.today()
         
+        # Проверка допустимости даты
         if date_obj != today:
             logging.warning(f"Попытка изменения не текущей даты: {date_str}")
-            return {'status': 'error', 'message': 'Можно изменять только текущий день'}, 400
+            return jsonify({
+                'status': 'error',
+                'message': 'Можно изменять только текущий день'
+            }), 400
             
         if date_obj < habit.created_at.date():
             logging.warning(f"Дата {date_str} раньше создания привычки")
-            return {'status': 'error', 'message': 'Нельзя изменять исторические данные'}, 400
+            return jsonify({
+                'status': 'error',
+                'message': 'Нельзя изменять исторические данные'
+            }), 400
 
         # Обновление прогресса
         progress = habit.progress.copy() or {}
@@ -300,13 +317,44 @@ def update_habit(habit_id):
             'total_days': len(progress)
         })
         
+    except ValueError as e:
+        logging.error(f'Ошибка валидации: {str(e)}')
+        return jsonify({
+            'status': 'error',
+            'message': f'Ошибка формата данных: {str(e)}'
+        }), 400
     except Exception as e:
-        logging.error(f'Ошибка обновления: {str(e)}')
+        logging.error(f'Критическая ошибка обновления: {str(e)}')
         db.session.rollback()
         return jsonify({
             'status': 'error',
-            'message': 'Ошибка сервера: ' + str(e)
+            'message': 'Внутренняя ошибка сервера: ' + str(e)
         }), 500
+
+@app.route('/habit/<int:habit_id>/update_meta', methods=['POST'])
+@login_required
+def update_habit_meta(habit_id):
+    """Обновление метаданных привычки"""
+    habit = Habit.query.get_or_404(habit_id)
+    
+    if habit.user_id != current_user.id:
+        return jsonify({'status': 'error', 'message': 'Доступ запрещен'}), 403
+
+    try:
+        # Обновление только названия
+        new_title = request.form.get('title')
+        if new_title and new_title != habit.title:
+            habit.title = new_title
+            db.session.commit()
+            flash('Название успешно обновлено', 'success')
+        
+        return redirect(url_for('dashboard'))
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Ошибка обновления: {str(e)}')
+        flash('Ошибка при обновлении привычки', 'danger')
+        return redirect(url_for('dashboard'))
 
 @app.route('/habit/<int:habit_id>/delete', methods=['DELETE'])
 @login_required
@@ -330,5 +378,5 @@ def logout():
     logging.info(f"Пользователь {current_user.email} вышел из системы")
     return redirect(url_for('index'))
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=os.environ.get('PORT', 3001))
+#if __name__ == '__main__':
+#    app.run(host='0.0.0.0', port=os.environ.get('PORT', 3001))

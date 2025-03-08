@@ -1,7 +1,11 @@
 import sys
 import os
 
-# Добавляем путь к вашему приложению
 sys.path.insert(0, '/sd/habitminder')
 
-from app import app as application  # Импортируйте ваше приложение Flask
+# Активация виртуального окружения
+activate_venv = os.path.expanduser('/sd/habitminder/venv/bin/activate_this.py')
+with open(activate_venv) as f:
+    exec(f.read(), {'__file__': activate_venv})
+
+from app import app as application

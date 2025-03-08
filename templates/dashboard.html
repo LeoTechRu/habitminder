@@ -86,7 +86,7 @@
                 <div class="modal fade" id="editHabit{{ habit.id }}" tabindex="-1">
                     <div class="modal-dialog">
                         <div class="modal-content">
-                            <form action="{{ url_for('update_habit', habit_id=habit.id) }}" method="POST">
+                            <form action="{{ url_for('update_habit_meta', habit_id=habit.id) }}" method="POST">
                                 <div class="modal-header">
                                     <h5 class="modal-title">Редактировать "{{ habit.title }}"</h5>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -102,16 +102,15 @@
                                     </div>
                                     <div class="mb-3">
                                         <label>Периодичность</label>
-                                        <select class="form-select" name="frequency">
-                                            <option value="daily" {% if habit.frequency == 'daily' %}selected{% endif %}>Ежедневно</option>
-                                            <option value="weekly" {% if habit.frequency == 'weekly' %}selected{% endif %}>Еженедельно</option>
-                                            <option value="monthly" {% if habit.frequency == 'monthly' %}selected{% endif %}>Ежемесячно</option>
+                                        <select class="form-select" disabled>
+                                            <option>{{ habit.frequency|ru_frequency }}</option>
                                         </select>
+                                        <small class="text-muted">Изменение периодичности недоступно</small>
                                     </div>
                                 </div>
                                 <div class="modal-footer">
                                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                                    <button type="submit" class="btn btn-primary">Сохранить</button>
                                 </div>
                             </form>
                         </div>
